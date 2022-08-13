@@ -1,4 +1,10 @@
-use bevy::{prelude::*, render::camera::Camera3d, ecs::event::Events, input::mouse::MouseMotion};
+use bevy::{
+    ecs::event::Events,
+    input::mouse::MouseMotion,
+    prelude::*,
+    render::texture::ImageSettings,
+    ui::entity::ImageBundle
+};
 use bevy_rapier3d::prelude::{
     *,
     CollisionEvent::{
@@ -6,23 +12,48 @@ use bevy_rapier3d::prelude::{
         Stopped 
     }
 };
+
 use std::f32::consts::PI;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
+mod debugger;
+mod sky;
+
+use debugger::{
+    Debugger, update_debugger
+};
+use sky::{
+    AtmospherePlugin,
+    material::Atmosphere,
+};
+
 /// This example shows various ways to configure texture materials in 3D
 fn main() {
     App::new()
+        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Atmosphere::default())
+        .insert_resource(ImageSettings::default_nearest())
+        .insert_resource(Debugger::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(DefaultRaycastingPlugin::<Player>::default())
+        //.add_plugin(RapierDebugRenderPlugin::default()) //collision debugging
+        .add_plugin(AtmospherePlugin::default())
+        //.add_plugin(MaterialPlugin::<CubemapMaterial>::default())
         .add_startup_system(setup_player)
+        .add_startup_system(setup_environment)
         .add_startup_system(terrain_generation)
+        //.add_startup_system(load_skybox)
+        //.add_system(create_skybox)
         .add_system(ground_event)
         .add_system(player_update)
+        .add_system(update_debugger)
+        .add_system(daylight_cycle)
         .run();
 }
 
+//player control starts at here
 #[derive(Component)]
 struct PlayerStatus {
     pitch: f32,
@@ -50,14 +81,12 @@ impl PlayerStatus {
 }
 
 #[derive(Component)]
-struct Player;
+pub struct Player;
 
 fn setup_player(
     mut commands: Commands,
     mut windows: ResMut<Windows>,
     asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let window = windows.get_primary_mut().unwrap();
     window.set_cursor_visibility(false);
@@ -67,7 +96,7 @@ fn setup_player(
         .spawn()
         .insert(Player)
         .insert(PlayerStatus::default())
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 1.5, 0.0)))
+        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 2.0, 0.0)))
         //Physical Body
         .insert(RigidBody::Dynamic)
         .insert(
@@ -76,39 +105,38 @@ fn setup_player(
         )
         .insert(Sleeping::disabled())
         .insert(Collider::cuboid(0.5, 1.0, 0.5))
-        //create a camera
         .with_children(|parent| {
             parent.spawn()
                 .insert(Collider::cuboid(0.5, 0.05, 0.5))
                 .insert(ActiveEvents::COLLISION_EVENTS)
-                .insert(Sensor(true))
-                .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, -2.45, 0.0)));
+                .insert(Sensor)
+                .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, -0.96, 0.0)));
 
-            parent.spawn_bundle(PerspectiveCameraBundle {
+            //create a camera
+            parent.spawn_bundle(Camera3dBundle {
                 // when you want to see your self, change the coordinate of z
                 transform: Transform::from_xyz(0.0, 0.5, 0.0),
                 ..default()
-            }).with_children(|camera| {
-                let plane = meshes.add(Mesh::from(shape::Plane{ size: 0.05 }));
-                let texture_handle = asset_server.load("cursor.png");
-                let material_handle = materials.add(StandardMaterial {
-                    base_color_texture: Some(texture_handle.clone()),
-                    alpha_mode: AlphaMode::Blend,
-                    unlit: true,
-                    ..default()
-                });
-                camera.spawn_bundle(PbrBundle {
-                    mesh: plane.clone(),
-                    material: material_handle.clone(),
-                    transform: Transform{
-                        translation: Vec3::new(0.0, 0.0, -1.0),
-                        rotation: Quat::from_rotation_x(std::f32::consts::PI / 2.0),
-                        ..default()
-                    },
-                    ..default()
-                }).insert(GlobalTransform::default());
             });
         });
+    
+        //create cursor
+        let texture_handle = asset_server.load("cursor.png");
+        commands.spawn_bundle(ImageBundle{
+            image: UiImage(texture_handle.clone()),
+            style: Style {
+                align_self: AlignSelf::FlexEnd,
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    top: Val::Percent(50.0),
+                    left: Val::Percent(50.0),
+                    ..default()
+                },
+                ..default()
+            },
+            ..default()
+            }
+        );
 }
 
 fn to_radians(x: f32) -> f32 { x * PI / 180.0 }
@@ -117,11 +145,6 @@ fn ground_event(
     mut collision_events: EventReader<CollisionEvent>,
     mut status: Query<&mut PlayerStatus>
 ) {
-    /*
-    for collision_event in collision_events.iter() {
-        println!("Received collision event: {:?}", collision_event);
-    }
-    */
     let mut player_status = match status.get_single_mut() {
         Ok(status) => status,
         _ => {
@@ -221,6 +244,60 @@ fn player_update(
     transform.rotation = yaw * transform.rotation;
     camera_transform.rotation = camera_transform.rotation * pitch;
 }
+//player control ends at here
+
+// the component for identify sun and moon
+#[derive(Component)]
+struct SunOrMoon {
+    is_sun: bool
+}
+
+// We can edit the SkyMaterial resource and it will be updated automatically, as long as AtmospherePlugin.dynamic is true
+fn daylight_cycle(
+    mut sky_mat: ResMut<Atmosphere>,
+    mut query: Query<(&mut Transform, &mut DirectionalLight, &SunOrMoon)>,
+    time: Res<Time>,
+) {
+    let mut pos = sky_mat.sun_position;
+    let t = time.time_since_startup().as_millis() as f32 / 2000.0;
+    pos.y = t.sin();
+    pos.z = t.cos();
+    sky_mat.sun_position = pos;
+
+    for (mut light_trans, mut directional, sun_type) in &mut query {
+        if sun_type.is_sun {
+            light_trans.rotation = Quat::from_rotation_x(-pos.y.atan2(pos.z));
+            directional.illuminance = t.sin().max(0.0).powf(2.0) * 100000.0;
+        } else {
+            light_trans.rotation = Quat::from_rotation_x(pos.y.atan2(pos.z));
+            directional.illuminance = t.sin().max(0.0).powf(2.0) * 1000.0;
+        }
+    }
+    /*
+    if let Some((mut light_trans, mut directional)) = query.single_mut().into() {
+        light_trans.rotation = Quat::from_rotation_x(-pos.y.atan2(pos.z));
+        directional.illuminance = t.sin().max(0.0).powf(2.0) * 100000.0;
+    }
+    */
+}
+
+fn setup_environment(
+    mut commands: Commands,
+) {
+    // Our Sun
+    commands
+        .spawn_bundle(DirectionalLightBundle {
+            ..Default::default()
+        })
+        .insert(SunOrMoon{ is_sun: true }); // Marks the light as Sun
+    
+    // Our Moon
+    commands
+        .spawn_bundle(DirectionalLightBundle {
+            ..Default::default()
+        })
+        .insert(SunOrMoon{ is_sun: false }); // Marks the light as Moon
+}
 
 fn terrain_generation(
     mut commands: Commands,
@@ -249,7 +326,6 @@ fn create_block(
     x: f32, y: f32, z: f32
 ) {
     let texture_handle = asset_server.load("textures/stone.png");
-    
     let plane = meshes.add(Mesh::from(shape::Plane{ size: 1.0 }));
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture_handle.clone()),
