@@ -4,7 +4,7 @@ use bevy::{
     ui::entity::TextBundle
 };
 
-use crate::Player;
+use crate::player::Player;
 
 #[derive(Default)]
 pub struct Debugger {
