@@ -71,15 +71,36 @@ fn atmosphere_init(
             material: atmosphere,
             ..Default::default()
         })
+        .insert(Transform::from_xyz(0.0, 0.0, 0.0))
         .insert(NotShadowCaster)
         .insert(Name::new("Sky Box"));
 }
 
+#[derive(Default)]
+pub struct AtmosphereTransform {
+    pub translation: Vec3
+}
+
+impl AtmosphereTransform {
+    pub fn update(&mut self, location: Vec3) {
+        let (x, z) = (location.x, location.z);
+        self.translation = Vec3::new(x, 0.0, z);
+    }
+}
+
 fn atmosphere_dynamic_sky(
+    mut atmosphere_transform: Query<(&mut Transform, &Name)>,
+    global_transform: Res<AtmosphereTransform>,
     global_atmosphere: Res<Atmosphere>,
     atmosphere_query: Query<&Handle<Atmosphere>>,
     mut atmospheres: ResMut<Assets<Atmosphere>>,
 ) {
+    if let Some((mut transform, name)) = atmosphere_transform.iter_mut().next() {
+        if name.as_str() == "Sky Box" {
+            transform.translation = global_transform.translation;
+        }
+    }
+    
     if global_atmosphere.is_changed() {
         if let Some(atmosphere_handle) = atmosphere_query.iter().next() {
             if let Some(atmosphere) = atmospheres.get_mut(atmosphere_handle) {
