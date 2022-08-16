@@ -10,6 +10,8 @@ use bevy_rapier3d::prelude::{
     }
 };
 
+use crate::sky::AtmosphereTransform;
+
 use std::f32::consts::PI;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -111,9 +113,7 @@ pub fn ground_event(
             error!("Player Status not found.");
             return;
         }
-    };use std::f32::consts::PI;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
+    };
     
     for collision_event in collision_events.iter() {
         match collision_event {
@@ -135,6 +135,7 @@ use std::collections::hash_map::Entry;
 pub fn player_update(
     keyboard_input: Res<Input<KeyCode>>,
     mouse_motion: Res<Events<MouseMotion>>,
+    mut sky_trans: ResMut<AtmosphereTransform>,
     time: Res<Time>,
     mut player_entity: Query<(&mut Transform, &mut PlayerStatus), (With<Player>, Without<Camera3d>)>,
     mut camera_transforms: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
@@ -190,6 +191,7 @@ pub fn player_update(
     if velocity != Vec3::ZERO {
         let dv = velocity * time.delta_seconds()*3.0;
         transform.translation += dv;
+        sky_trans.update(transform.translation);
     }
 
     //event reader

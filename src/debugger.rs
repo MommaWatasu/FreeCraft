@@ -42,7 +42,7 @@ pub fn update_debugger(
     asset_server: Res<AssetServer>,
     mut debugger: ResMut<Debugger>,
     keyboard_input: Res<Input<KeyCode>>,
-    player_entity: Query<&Transform, With<Player>>,
+    player: Query<&Transform, With<Player>>,
     mut query: Query<&mut Text>,
 ) {
     if keyboard_input.just_pressed(KeyCode::F3) {
@@ -56,7 +56,7 @@ pub fn update_debugger(
     }
     if debugger.enable {
         let translation
-            = match player_entity.get_single() {
+            = match player.get_single() {
             Ok(transform) => transform.translation,
             _ => {
                 error!("Player not found.");
