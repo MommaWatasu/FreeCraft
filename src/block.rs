@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 
 use crate::player::SeenObject;
 
@@ -48,17 +49,6 @@ impl BlockBreaker {
         self.block_id = entity;
         self.phase = 0;
         self.elapsed_time = 0.0;
-        /*
-        let plane = meshes.add(Mesh::from(shape::Plane{ size: 1.0 }));
-        let texture_handle = asset_server.load("textures/block/breaking0.png");
-        let material = materials.add(StandardMaterial {
-            base_color_texture: Some(texture_handle.clone()),
-            alpha_mode: AlphaMode::Blend,
-            unlit: true,
-            ..default()
-        });
-        self.breaking_textures = BlockBreaker::create_box(commands, plane, material, block.coord);
-        */
     }
     
     fn update(
@@ -80,17 +70,6 @@ impl BlockBreaker {
             ..default()
         });
         self.breaking_textures = BlockBreaker::create_box(commands, plane, material, self.block.coord);
-        /*
-        self.breaking_texture = commands.spawn_bundle(PbrBundle {
-            mesh: plane.clone(),
-            material: material.clone(),
-            transform: {
-                let (x, y, z) = (self.block.coord.x, self.block.coord.y, self.block.coord.z);
-                Transform::from_xyz(x, y+0.5, z)
-            },
-            ..default()
-        }).id();
-        */
     }
     
     fn create_box(
@@ -238,4 +217,159 @@ pub fn control_block(
         breaker.clean_up(&mut commands);
         commands.remove_resource::<BlockBreaker>()
     }
+}
+
+pub fn create_block(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    coord: Vec3
+) {
+    let (x, y, z) = (coord.x, coord.y, coord.z);
+    let mut textures: [Entity; 6] = [Entity::from_raw(0); 6];
+    let mut transform: Transform;
+    let mut material: Handle<StandardMaterial>;
+    let binding = asset_server.load("textures/block/stone.png");
+    let texture_handles = [&binding; 6];
+    let plane = meshes.add(Mesh::from(shape::Plane{ size: 1.0 }));
+
+    textures[0] = {
+        transform = Transform {
+            translation: Vec3::new(x+0.5, y, z),
+            rotation: Quat::from_rotation_x(-std::f32::consts::PI / 2.0),
+            ..default()
+        };
+        transform.rotate(Quat::from_axis_angle(Vec3::Y, -std::f32::consts::PI / 2.0));
+
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[0].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform,
+            ..default()
+        })
+        .id()
+    };
+
+    textures[1] = {
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[1].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform: Transform::from_xyz(x, y+0.5, z),
+            ..default()
+        })
+        .id()
+    };
+
+    textures[2] = {
+        transform = Transform {
+            translation: Vec3::new(x, y, z+0.5),
+            rotation: Quat::from_rotation_x(std::f32::consts::PI / 2.0),
+            ..default()
+        };
+
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[2].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform,
+            ..default()
+        })
+        .id()
+    };
+
+    textures[3] = {
+        transform = Transform {
+            translation: Vec3::new(x-0.5, y, z),
+            rotation: Quat::from_rotation_x(-std::f32::consts::PI / 2.0),
+            ..default()
+        };
+        transform.rotate(Quat::from_axis_angle(Vec3::Y, std::f32::consts::PI / 2.0));
+
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[3].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform,
+            ..default()
+        })
+        .id()
+    };
+
+    textures[4] = {
+        transform = Transform {
+            translation: Vec3::new(x, y-0.5, z),
+            rotation: Quat::from_rotation_x(std::f32::consts::PI),
+            ..default()
+        };
+
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[4].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform,
+            ..default()
+        })
+        .id()
+    };
+
+    textures[5] = {
+        transform = Transform {
+            translation: Vec3::new(x, y, z-0.5),
+            rotation: Quat::from_rotation_x(-std::f32::consts::PI / 2.0),
+            ..default()
+        };
+
+        material = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handles[5].clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
+        commands.spawn_bundle(PbrBundle {
+            mesh: plane.clone(),
+            material: material.clone(),
+            transform,
+            ..default()
+        })
+        .id()
+    };
+
+    commands.spawn()
+        .insert_bundle(TransformBundle::from(Transform::from_translation(coord)))
+        .insert(Block{ textures, coord })
+        .insert(Collider::cuboid(0.5, 0.5, 0.5));
 }
