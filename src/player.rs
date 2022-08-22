@@ -18,24 +18,16 @@ use crate::{
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct PlayerStatus {
     pitch: f32,
     grounds: HashMap<u32, bool>,
     on_ground: bool,
-    jump_velocity: Vec3
+    jump_velocity: Vec3,
+    pub see_at: Vec3,
+    pub block_placed: bool
 }
 
-impl Default for PlayerStatus {
-    fn default() -> Self {
-        Self{
-            pitch: 0.0,
-            grounds: HashMap::new(),
-            on_ground: true,
-            jump_velocity: Vec3::ZERO
-        }
-    }
-}
 impl PlayerStatus {   
     fn ground_remove(&mut self, index: u32) {
         if let Entry::Occupied(o) = self.grounds.entry(index.try_into().unwrap()) {
@@ -215,13 +207,13 @@ pub struct SeenObject;
 pub fn player_eye(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
-    player: Query<Entity, With<Player>>,
+    mut player: Query<(Entity, &mut PlayerStatus), With<Player>>,
     camera: Query<&GlobalTransform, With<Camera3d>>,
     seen_object: Query<Entity, With<SeenObject>>
 ) {
-    let player_handle
-        = match player.get_single() {
-        Ok(entity) => entity,
+    let (player_handle, mut status)
+        = match player.get_single_mut() {
+        Ok((entity, status)) => (entity, status),
         _ => {
             error!("Player not found.");
             return;
@@ -249,9 +241,10 @@ pub fn player_eye(
     let solid = true;
     let filter = QueryFilter::new().exclude_rigid_body(player_handle);
 
-    if let Some((entity, _toi)) = rapier_context.cast_ray(
+    if let Some((entity, toi)) = rapier_context.cast_ray(
         ray_ori, ray_dir, max_toi, solid, filter
     ) {
+        status.see_at = ray_ori + ray_dir * toi;
         commands.entity(entity).insert(SeenObject);
     }
 }

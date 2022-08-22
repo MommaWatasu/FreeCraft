@@ -1,7 +1,13 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use crate::player::SeenObject;
+use crate::{
+    player::{
+        PlayerStatus,
+        SeenObject
+    },
+    utils::decimal_round
+};
 
 #[derive(Component, Clone, Copy)]
 pub struct Block {
@@ -20,9 +26,9 @@ pub struct BlockBreaker {
 impl BlockBreaker {
     fn new(
         commands: &mut Commands,
-        asset_server: Res<AssetServer>,
-        mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<StandardMaterial>>,
+        asset_server: &Res<AssetServer>,
+        meshes: &mut ResMut<Assets<Mesh>>,
+        materials: &mut ResMut<Assets<StandardMaterial>>,
         block: Block,
         block_id: Entity
     ) -> Self {
@@ -54,9 +60,9 @@ impl BlockBreaker {
     fn update(
         &mut self,
         commands: &mut Commands,
-        asset_server: Res<AssetServer>,
-        mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<StandardMaterial>>,
+        asset_server: &Res<AssetServer>,
+        meshes: &mut ResMut<Assets<Mesh>>,
+        materials: &mut ResMut<Assets<StandardMaterial>>,
     ) {
         for texture in self.breaking_textures {
             commands.entity(texture).despawn();
@@ -188,34 +194,62 @@ pub fn control_block(
     time: Res<Time>,
     mouse: Res<Input<MouseButton>>,
     asset_server: Res<AssetServer>,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<StandardMaterial>>,
-    seen_block: Query<(Entity, &Block), With<SeenObject>>
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    seen_block: Query<(Entity, &Block), With<SeenObject>>,
+    mut player_status: Query<&mut PlayerStatus>
 ) {
-    if let Ok((entity, block)) = seen_block.get_single() && mouse.pressed(MouseButton::Left) {
-        if let Some(mut breaker) = blockbreaker {
-            if breaker.block_id != entity {
-                breaker.initialize(*block, entity)
-            } else {
-                breaker.elapsed_time += time.delta_seconds();
-                if breaker.elapsed_time > 0.375 {
-                    breaker.elapsed_time -= 0.375;
-                    breaker.phase += 1;
-                    if breaker.phase == 9 {
-                        breaker.break_block(&mut commands);
-                        commands.remove_resource::<BlockBreaker>();
-                    } else {
-                        breaker.update(&mut commands, asset_server, meshes, materials)
+    if let Ok((entity, block)) = seen_block.get_single() {
+        if mouse.pressed(MouseButton::Left) {
+            if let Some(mut breaker) = blockbreaker {
+                if breaker.block_id != entity {
+                    breaker.initialize(*block, entity)
+                } else {
+                    breaker.elapsed_time += time.delta_seconds();
+                    if breaker.elapsed_time > 0.375 {
+                        breaker.elapsed_time -= 0.375;
+                        breaker.phase += 1;
+                        if breaker.phase == 9 {
+                            breaker.break_block(&mut commands);
+                            commands.remove_resource::<BlockBreaker>();
+                        } else {
+                            breaker.update(&mut commands, &asset_server, &mut meshes, &mut materials)
+                        }
                     }
                 }
+            } else {
+                let breaker = BlockBreaker::new(&mut commands, &asset_server, &mut meshes, &mut materials, *block, entity);
+                commands.insert_resource(breaker);
+            }
+        } else if let Some(breaker) = blockbreaker {
+            breaker.clean_up(&mut commands);
+            commands.remove_resource::<BlockBreaker>()
+        }
+        let mut status
+            = match player_status.get_single_mut() {
+            Ok(status) => status,
+            _ => {
+                error!("Player not found.");
+                return;
+            }
+        };
+        if mouse.pressed(MouseButton::Right) {
+            if !status.block_placed {
+                let diff = (status.see_at - block.coord).to_array();
+                let mut new_coord = block.coord.to_array();
+                for dim in 0..3 {
+                    if decimal_round(diff[dim]) == 0.5 {
+                        new_coord[dim] += 1.0;
+                    } else if decimal_round(diff[dim]) == -0.5 {
+                        new_coord[dim] -= 1.0;
+                    }
+                }
+                create_block(&mut commands, &asset_server, &mut meshes, &mut materials, Vec3::from_array(new_coord));
+                status.block_placed = true;
             }
         } else {
-            let breaker = BlockBreaker::new(&mut commands, asset_server, meshes, materials, *block, entity);
-            commands.insert_resource(breaker);
+            status.block_placed = false;
         }
-    } else if let Some(breaker) = blockbreaker {
-        breaker.clean_up(&mut commands);
-        commands.remove_resource::<BlockBreaker>()
     }
 }
 
