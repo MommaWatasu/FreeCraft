@@ -10,8 +10,12 @@ mod block;
 mod debugger;
 mod player;
 mod sky;
+mod utils;
 
-use block::Block;
+use block::{
+    Block,
+    control_block
+};
 use debugger::{
     Debugger, update_debugger
 };
@@ -19,7 +23,7 @@ use player::{
     setup_player,
     ground_event,
     player_update,
-    player_sight_line
+    player_eye
 };
 use sky::{
     AtmospherePlugin,
@@ -39,17 +43,15 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         //.add_plugin(RapierDebugRenderPlugin::default()) //collision debugging
         .add_plugin(AtmospherePlugin::default())
-        //.add_plugin(MaterialPlugin::<CubemapMaterial>::default())
         .add_startup_system(setup_player)
         .add_startup_system(setup_environment)
         .add_startup_system(terrain_generation)
-        //.add_startup_system(load_skybox)
-        //.add_system(create_skybox)
         .add_system(ground_event)
         .add_system(player_update)
         .add_system(update_debugger)
         .add_system(daylight_cycle)
-        .add_system(player_sight_line)
+        .add_system(player_eye.label("raycast"))
+        .add_system(control_block.after("raycast"))
         .run();
 }
 
@@ -133,10 +135,10 @@ fn create_block(
     coord: Vec3
 ) {
     let (x, y, z) = (coord.x, coord.y, coord.z);
-    let mut textures: [u32; 6] = [0; 6];
+    let mut textures: [Entity; 6] = [Entity::from_raw(0); 6];
     let mut transform: Transform;
     let mut material: Handle<StandardMaterial>;
-    let binding = asset_server.load("textures/stone.png");
+    let binding = asset_server.load("textures/block/stone.png");
     let texture_handles = [&binding; 6];
     let plane = meshes.add(Mesh::from(shape::Plane{ size: 1.0 }));
 
@@ -161,7 +163,7 @@ fn create_block(
             transform,
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     textures[1] = {
@@ -175,13 +177,10 @@ fn create_block(
         commands.spawn_bundle(PbrBundle {
             mesh: plane.clone(),
             material: material.clone(),
-            transform: Transform {
-                translation: Vec3::new(x, y+0.5, z),
-                ..default()
-            },
+            transform: Transform::from_xyz(x, y+0.5, z),
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     textures[2] = {
@@ -204,7 +203,7 @@ fn create_block(
             transform,
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     textures[3] = {
@@ -228,7 +227,7 @@ fn create_block(
             transform,
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     textures[4] = {
@@ -251,7 +250,7 @@ fn create_block(
             transform,
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     textures[5] = {
@@ -274,7 +273,7 @@ fn create_block(
             transform,
             ..default()
         })
-        .id().id()
+        .id()
     };
 
     commands.spawn()

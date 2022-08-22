@@ -10,9 +10,11 @@ use bevy_rapier3d::prelude::{
     }
 };
 
-use crate::sky::AtmosphereTransform;
+use crate::{
+    sky::AtmosphereTransform,
+    utils::to_radians
+};
 
-use std::f32::consts::PI;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
@@ -100,8 +102,6 @@ pub fn setup_player(
             }
         );
 }
-
-fn to_radians(x: f32) -> f32 { x * PI / 180.0 }
 
 pub fn ground_event(
     mut collision_events: EventReader<CollisionEvent>,
@@ -209,10 +209,15 @@ pub fn player_update(
     camera_transform.rotation = camera_transform.rotation * pitch;
 }
 
-pub fn player_sight_line(
+#[derive(Component)]
+pub struct SeenObject;
+
+pub fn player_eye(
+    mut commands: Commands,
     rapier_context: Res<RapierContext>,
     player: Query<Entity, With<Player>>,
-    camera: Query<&GlobalTransform, With<Camera3d>>
+    camera: Query<&GlobalTransform, With<Camera3d>>,
+    seen_object: Query<Entity, With<SeenObject>>
 ) {
     let player_handle
         = match player.get_single() {
@@ -230,21 +235,23 @@ pub fn player_sight_line(
             return;
         }
     };
+    // clear seen object
+    match seen_object.get_single() {
+        Ok(entity) => {
+            commands.entity(entity).remove::<SeenObject>();
+        },
+        _ => {}
+    }
     
     let ray_ori = transform.translation();
     let ray_dir = transform.forward();
     let max_toi = 5.0;
     let solid = true;
     let filter = QueryFilter::new().exclude_rigid_body(player_handle);
-    
-    if let Some((entity, toi)) = rapier_context.cast_ray(
+
+    if let Some((entity, _toi)) = rapier_context.cast_ray(
         ray_ori, ray_dir, max_toi, solid, filter
     ) {
-        // The first collider hit has the entity `entity` and it hit after
-        // the ray travelled a distance equal to `ray_dir * toi`.
-        let hit_point = ray_ori + ray_dir * toi;
-        println!("Entity {:?} hit at point {}", entity, hit_point);
-    } else {
-        println!("===========================");
+        commands.entity(entity).insert(SeenObject);
     }
 }
