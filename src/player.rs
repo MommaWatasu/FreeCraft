@@ -68,10 +68,10 @@ pub fn setup_player(
             | LockedAxes::ROTATION_LOCKED_Z
         )
         .insert(Sleeping::disabled())
-        .insert(Collider::cuboid(0.5, 1.0, 0.5))
+        .insert(Collider::cuboid(0.3, 1.0, 0.3))
         .with_children(|parent| {
             parent.spawn()
-                .insert(Collider::cuboid(0.5, 0.05, 0.5))
+                .insert(Collider::cuboid(0.3, 0.05, 0.3))
                 .insert(ActiveEvents::COLLISION_EVENTS)
                 .insert(Sensor)
                 .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, -0.96, 0.0)));
