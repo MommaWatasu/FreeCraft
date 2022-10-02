@@ -8,6 +8,7 @@ use bevy_rapier3d::prelude::{
 
 mod block;
 mod debugger;
+mod generator;
 mod player;
 mod sky;
 mod utils;
@@ -19,6 +20,7 @@ use block::{
 use debugger::{
     Debugger, update_debugger
 };
+use generator::height_generator;
 use player::{
     setup_player,
     ground_event,
@@ -114,6 +116,7 @@ fn terrain_generation(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    /*
     for i in -3..3 {
         for j in -3..3 {
             create_block(&mut commands, &asset_server, &mut meshes, &mut materials, Vec3::new(i as f32, 0.0, j as f32))
@@ -124,5 +127,22 @@ fn terrain_generation(
             create_block(&mut commands, &asset_server, &mut meshes, &mut materials, Vec3::new(i as f32, -1.0, j as f32))
         }
     }
-    
+    */
+    let map = height_generator(-15, -15);
+    for x in 0..16 {
+        for y in 60..66 {
+            for z in 0..16 {
+                match map[[x, y, z]] {
+                    0 => {},
+                    1 => {
+                        create_block(&mut commands, &asset_server, "textures/block/water.png", &mut meshes, &mut materials, Vec3::new(x as f32, y as f32, z as f32))
+                    },
+                    2 => {
+                        create_block(&mut commands, &asset_server, "textures/block/stone.png", &mut meshes, &mut materials, Vec3::new(x as f32, y as f32, z as f32))
+                    },
+                    _=>{}
+                }
+            }
+        }
+    }
 }

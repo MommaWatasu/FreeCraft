@@ -25,7 +25,7 @@ pub struct PlayerStatus {
     on_ground: bool,
     jump_velocity: Vec3,
     pub see_at: Vec3,
-    pub block_placed: bool
+    pub block_put: bool
 }
 
 impl PlayerStatus {   
@@ -52,7 +52,7 @@ pub fn setup_player(
         .spawn()
         .insert(Player)
         .insert(PlayerStatus::default())
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 2.0, 0.0)))
+        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 65.0, 0.0)))
         //Physical Body
         .insert(RigidBody::Dynamic)
         .insert(

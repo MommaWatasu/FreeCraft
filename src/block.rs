@@ -234,7 +234,7 @@ pub fn control_block(
             }
         };
         if mouse.pressed(MouseButton::Right) {
-            if !status.block_placed {
+            if !status.block_put {
                 let diff = (status.see_at - block.coord).to_array();
                 let mut new_coord = block.coord.to_array();
                 for dim in 0..3 {
@@ -244,11 +244,11 @@ pub fn control_block(
                         new_coord[dim] -= 1.0;
                     }
                 }
-                create_block(&mut commands, &asset_server, &mut meshes, &mut materials, Vec3::from_array(new_coord));
-                status.block_placed = true;
+                create_block(&mut commands, &asset_server, "textures/block/stone.png", &mut meshes, &mut materials, Vec3::from_array(new_coord));
+                status.block_put = true;
             }
         } else {
-            status.block_placed = false;
+            status.block_put = false;
         }
     }
 }
@@ -256,6 +256,7 @@ pub fn control_block(
 pub fn create_block(
     commands: &mut Commands,
     asset_server: &Res<AssetServer>,
+    asset_path: &str,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     coord: Vec3
@@ -264,7 +265,7 @@ pub fn create_block(
     let mut textures: [Entity; 6] = [Entity::from_raw(0); 6];
     let mut transform: Transform;
     let mut material: Handle<StandardMaterial>;
-    let binding = asset_server.load("textures/block/stone.png");
+    let binding = asset_server.load(asset_path);
     let texture_handles = [&binding; 6];
     let plane = meshes.add(Mesh::from(shape::Plane{ size: 1.0 }));
 
